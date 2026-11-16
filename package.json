@@ -1,0 +1,46 @@
+{
+  "name": "git-good-guard",
+  "version": "0.1.0",
+  "description": "Your Personal Git Safety Net - detect common Git mistakes before they become problems.",
+  "main": "src/index.js",
+  "bin": {
+    "git-good": "bin/git-good.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kanikasharma-18/GitGood.git"
+  },
+  "keywords": [
+    "git",
+    "git-cli",
+    "cli",
+    "developer-tools",
+    "security",
+    "secret-scanning",
+    "secret-detection"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "bugs": {
+    "url": "https://github.com/kanikasharma-18/GitGood/issues"
+  },
+  "homepage": "https://github.com/kanikasharma-18/GitGood#readme",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^15.1.0",
+    "simple-git": "^4.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^10.15.0",
+    "vitest": "^4.1.12"
+  }
+}
