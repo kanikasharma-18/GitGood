@@ -5,6 +5,7 @@ const { scanSecrets } = require("./scanners/secrets");
 const { scanLargeFiles } = require("./scanners/largeFiles");
 const { checkCommitMessage } = require("./scanners/commitMessage");
 const { checkBranchSafety } = require("./scanners/branchSafety");
+const { initConfig, loadConfig } = require("./config");
 
 const program = new Command();
 
@@ -40,9 +41,9 @@ async function checkCommit(directory) {
   };
 }
 
-async function checkBranch(directory) {
+async function checkBranch(directory, options = {}) {
   try {
-    return await checkBranchSafety(directory);
+    return await checkBranchSafety(directory, options);
   } catch (error) {
     const git = simpleGit(directory);
     if (!(await git.checkIsRepo())) {
@@ -82,6 +83,24 @@ async function runCheck(title, check, getStatus, getDetails) {
 }
 
 async function runChecks(directory = process.cwd()) {
+  let config;
+
+  try {
+    config = await loadConfig(directory);
+  } catch (error) {
+    const details = getErrorMessage(error);
+    return {
+      checks: ["Secrets", "Large files", "Commit message", "Branch safety"].map(
+        (title) => ({
+          title,
+          status: "FAIL",
+          details,
+        })
+      ),
+      exitCode: 1,
+    };
+  }
+
   const checks = await Promise.all([
     runCheck(
       "Secrets",
@@ -97,7 +116,10 @@ async function runChecks(directory = process.cwd()) {
     ),
     runCheck(
       "Large files",
-      () => scanLargeFiles(directory),
+      () =>
+        scanLargeFiles(directory, {
+          maxSize: config.maxFileSize * 1024 * 1024,
+        }),
       (result) => (result.hasLargeFiles ? "FAIL" : "PASS"),
       (result) =>
         result.hasLargeFiles
@@ -115,7 +137,10 @@ async function runChecks(directory = process.cwd()) {
     ),
     runCheck(
       "Branch safety",
-      () => checkBranch(directory),
+      () =>
+        checkBranch(directory, {
+          protectedBranches: config.protectedBranches,
+        }),
       (result) => (result.protected ? "WARN" : "PASS"),
       (result) =>
         result.protected
@@ -163,6 +188,23 @@ program
     const report = await runChecks();
     console.log(formatCheckReport(report));
     process.exitCode = report.exitCode;
+  });
+
+program
+  .command("init")
+  .description("Create a GitGood configuration file")
+  .action(async () => {
+    try {
+      const result = await initConfig();
+      if (result.created) {
+        console.log(chalk.green(`Created ${result.path} with default settings.`));
+      } else {
+        console.log(chalk.yellow(`Configuration already exists at ${result.path}.`));
+      }
+    } catch (error) {
+      console.error(chalk.red(`Unable to initialize GitGood: ${getErrorMessage(error)}`));
+      process.exitCode = 1;
+    }
   });
 
 program.action(() => {
