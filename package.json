@@ -6,6 +6,12 @@
   "bin": {
     "git-good": "bin/git-good.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",

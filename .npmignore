@@ -1,0 +1,6 @@
+tests/
+.github/
+eslint.config.js
+.gitgoodrc.json
+coverage/
+node_modules/
