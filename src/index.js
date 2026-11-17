@@ -6,6 +6,7 @@ const { scanLargeFiles } = require("./scanners/largeFiles");
 const { checkCommitMessage } = require("./scanners/commitMessage");
 const { checkBranchSafety } = require("./scanners/branchSafety");
 const { initConfig, loadConfig } = require("./config");
+const { installHooks, uninstallHooks } = require("./hooks");
 
 const program = new Command();
 
@@ -203,6 +204,46 @@ program
       }
     } catch (error) {
       console.error(chalk.red(`Unable to initialize GitGood: ${getErrorMessage(error)}`));
+      process.exitCode = 1;
+    }
+  });
+
+const hooksCommand = program
+  .command("hooks")
+  .description("Manage GitGood Git hooks");
+
+hooksCommand
+  .command("install")
+  .description("Install the GitGood pre-commit hook")
+  .action(async () => {
+    try {
+      const result = await installHooks();
+      console.log(
+        result.alreadyInstalled
+          ? chalk.yellow("GitGood pre-commit hook is already installed.")
+          : chalk.green("GitGood pre-commit hook installed successfully.")
+      );
+    } catch (error) {
+      console.error(chalk.red(`Unable to install GitGood hooks: ${getErrorMessage(error)}`));
+      process.exitCode = 1;
+    }
+  });
+
+hooksCommand
+  .command("uninstall")
+  .description("Uninstall the GitGood pre-commit hook")
+  .action(async () => {
+    try {
+      const result = await uninstallHooks();
+      console.log(
+        result.uninstalled
+          ? result.restored
+            ? chalk.green("GitGood hook removed and the original hook restored.")
+            : chalk.green("GitGood pre-commit hook removed.")
+          : chalk.yellow("GitGood pre-commit hook is not installed.")
+      );
+    } catch (error) {
+      console.error(chalk.red(`Unable to uninstall GitGood hooks: ${getErrorMessage(error)}`));
       process.exitCode = 1;
     }
   });
