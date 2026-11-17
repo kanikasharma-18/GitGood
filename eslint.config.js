@@ -44,4 +44,10 @@ module.exports = [
     },
     rules: recommendedRules,
   },
+  {
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
 ];
