@@ -9,7 +9,7 @@ GitGood is a beginner-friendly command-line tool that checks common Git mistakes
 - Validate the latest commit message against Conventional Commits.
 - Warn when working on a protected branch.
 - Configure project-specific limits and protected branches.
-- Install and remove a Git `pre-commit` hook safely.
+- Install and remove managed Git `pre-commit` and `commit-msg` hooks safely.
 
 ## Requirements
 
@@ -77,22 +77,6 @@ git-good init
 ```
 
 This creates `.gitgoodrc.json` at the repository root with the default settings. It never overwrites an existing configuration file.
-
-### Install the pre-commit hook
-
-```bash
-git-good hooks install
-```
-
-The hook runs `git-good check` before a commit. A failed check prevents the commit, while a protected branch warning does not.
-
-### Uninstall the pre-commit hook
-
-```bash
-git-good hooks uninstall
-```
-
-This removes only the GitGood-managed hook. If an existing hook was backed up during installation, it is restored.
 
 ## Checks
 
@@ -196,11 +180,37 @@ Options can be combined, and omitted options retain their defaults. Invalid JSON
 
 ## Git hooks
 
-`git-good hooks install` creates a managed `pre-commit` hook in the repository's Git hooks directory. The hook invokes the installed GitGood CLI using its resolved package path.
+Install both Git hooks with:
 
-If a `pre-commit` hook already exists, GitGood preserves it in `pre-commit.gitgood-backup` before installing its own hook. Repeating installation is safe and does not replace the managed hook. Installation refuses to overwrite a conflicting backup.
+```bash
+git-good hooks install
+```
 
-`git-good hooks uninstall` removes only a hook marked as GitGood-managed. When a backup exists, the original hook is restored and the backup is removed. If no GitGood-managed hook exists, uninstall does nothing.
+This creates managed hooks in the repository's `.git/hooks` directory:
+
+- `pre-commit` runs `git-good check` before a commit is created.
+- `commit-msg` validates the proposed commit message using the Conventional Commit rules.
+
+Invalid checks prevent the commit, while a protected branch warning does not.
+
+### Existing hook backup and restoration
+
+Before installing a managed hook, GitGood checks for an existing hook:
+
+- GitGood moves an existing `pre-commit` hook to `pre-commit.gitgood-backup` before installing the managed hook.
+- GitGood moves an existing `commit-msg` hook to `commit-msg.gitgood-backup` before installing the managed hook.
+
+The existing hook is then restored when GitGood uninstalls the matching managed hook. GitGood removes its backup file after restoring the original hook.
+
+Installation is safe to repeat. It does not replace an already managed hook and refuses to overwrite a conflicting backup.
+
+Uninstall the hooks with:
+
+```bash
+git-good hooks uninstall
+```
+
+Uninstallation removes only GitGood-managed hooks. It restores both backed-up original hooks and removes their backup files. If no GitGood-managed hook exists, uninstall does nothing.
 
 ## Development
 
