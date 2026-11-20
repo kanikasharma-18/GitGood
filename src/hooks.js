@@ -5,15 +5,21 @@ const { getGitRoot } = require("./utils/git");
 
 const HOOK_NAME = "pre-commit";
 const BACKUP_NAME = "pre-commit.gitgood-backup";
+const COMMIT_MSG_HOOK_NAME = "commit-msg";
+const COMMIT_MSG_BACKUP_NAME = "commit-msg.gitgood-backup";
 const HOOK_MARKER = "# git-good-managed-hook";
 
 function shellQuote(value) {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function createHookContent() {
+function createHookContent(hookName) {
   const cliPath = path.resolve(__dirname, "../bin/git-good.js");
-  return `#!/bin/sh\n${HOOK_MARKER}\nexec node ${shellQuote(cliPath)} check\n`;
+  const command =
+    hookName === COMMIT_MSG_HOOK_NAME
+      ? `commit-msg "$1"`
+      : "check";
+  return `#!/bin/sh\n${HOOK_MARKER}\nexec node ${shellQuote(cliPath)} ${command}\n`;
 }
 
 async function getHooksDirectory(root) {
@@ -37,77 +43,114 @@ async function readIfExists(filePath) {
 async function installHooks(directory = process.cwd()) {
   const root = await getGitRoot(directory);
   const hooksDirectory = await getHooksDirectory(root);
-  const hookPath = path.join(hooksDirectory, HOOK_NAME);
-  const backupPath = path.join(hooksDirectory, BACKUP_NAME);
-  const existingHook = await readIfExists(hookPath);
+  const hookDefinitions = [
+    {
+      name: HOOK_NAME,
+      backupName: BACKUP_NAME,
+    },
+    {
+      name: COMMIT_MSG_HOOK_NAME,
+      backupName: COMMIT_MSG_BACKUP_NAME,
+    },
+  ].map((hook) => ({
+    ...hook,
+    hookPath: path.join(hooksDirectory, hook.name),
+    backupPath: path.join(hooksDirectory, hook.backupName),
+  }));
+  const existingHooks = await Promise.all(
+    hookDefinitions.map(async (hook) => ({
+      ...hook,
+      content: await readIfExists(hook.hookPath),
+      backup: await readIfExists(hook.backupPath),
+    }))
+  );
 
-  if (existingHook && existingHook.includes(HOOK_MARKER)) {
+  if (existingHooks.every((hook) => hook.content?.includes(HOOK_MARKER))) {
     return {
       installed: false,
       alreadyInstalled: true,
-      hookPath,
-      backupPath,
+      hooks: existingHooks.map(({ hookPath, backupPath }) => ({
+        hookPath,
+        backupPath,
+      })),
     };
   }
 
-  if (existingHook) {
-    const existingBackup = await readIfExists(backupPath);
-    if (existingBackup !== null) {
+  for (const hook of existingHooks) {
+    if (hook.content && !hook.content.includes(HOOK_MARKER) && hook.backup !== null) {
       throw new Error(
-        `A GitGood backup already exists at ${backupPath}; refusing to replace the existing hook.`
+        `A GitGood backup already exists at ${hook.backupPath}; refusing to replace the existing hook.`
       );
     }
-
-    await fs.rename(hookPath, backupPath);
   }
 
-  await fs.writeFile(hookPath, createHookContent(), {
-    encoding: "utf8",
-    mode: 0o755,
-  });
-  await fs.chmod(hookPath, 0o755);
+  for (const hook of existingHooks) {
+    if (hook.content && !hook.content.includes(HOOK_MARKER)) {
+      await fs.rename(hook.hookPath, hook.backupPath);
+    }
+
+    if (!hook.content || !hook.content.includes(HOOK_MARKER)) {
+      await fs.writeFile(hook.hookPath, createHookContent(hook.name), {
+        encoding: "utf8",
+        mode: 0o755,
+      });
+      await fs.chmod(hook.hookPath, 0o755);
+    }
+  }
 
   return {
     installed: true,
     alreadyInstalled: false,
-    hookPath,
-    backupPath: existingHook ? backupPath : null,
+    hooks: existingHooks.map(({ hookPath, backupPath, content }) => ({
+      hookPath,
+      backupPath: content && !content.includes(HOOK_MARKER) ? backupPath : null,
+    })),
   };
 }
 
 async function uninstallHooks(directory = process.cwd()) {
   const root = await getGitRoot(directory);
   const hooksDirectory = await getHooksDirectory(root);
-  const hookPath = path.join(hooksDirectory, HOOK_NAME);
-  const backupPath = path.join(hooksDirectory, BACKUP_NAME);
-  const existingHook = await readIfExists(hookPath);
+  const hookDefinitions = [
+    { name: HOOK_NAME, backupName: BACKUP_NAME },
+    { name: COMMIT_MSG_HOOK_NAME, backupName: COMMIT_MSG_BACKUP_NAME },
+  ].map((hook) => ({
+    ...hook,
+    hookPath: path.join(hooksDirectory, hook.name),
+    backupPath: path.join(hooksDirectory, hook.backupName),
+  }));
+  let uninstalled = false;
+  let restored = false;
 
-  if (!existingHook || !existingHook.includes(HOOK_MARKER)) {
-    return {
-      uninstalled: false,
-      restored: false,
-      hookPath,
-      backupPath,
-    };
-  }
+  for (const hook of hookDefinitions) {
+    const existingHook = await readIfExists(hook.hookPath);
+    if (!existingHook || !existingHook.includes(HOOK_MARKER)) {
+      continue;
+    }
 
-  await fs.rm(hookPath);
-  const backup = await readIfExists(backupPath);
+    uninstalled = true;
+    await fs.rm(hook.hookPath);
+    const backup = await readIfExists(hook.backupPath);
 
-  if (backup !== null) {
-    await fs.rename(backupPath, hookPath);
+    if (backup !== null) {
+      await fs.rename(hook.backupPath, hook.hookPath);
+      restored = true;
+    }
   }
 
   return {
-    uninstalled: true,
-    restored: backup !== null,
-    hookPath,
-    backupPath,
+    uninstalled,
+    restored,
+    hooks: hookDefinitions.map(({ hookPath, backupPath }) => ({
+      hookPath,
+      backupPath,
+    })),
   };
 }
 
 module.exports = {
   BACKUP_NAME,
+  COMMIT_MSG_BACKUP_NAME,
   HOOK_MARKER,
   installHooks,
   uninstallHooks,

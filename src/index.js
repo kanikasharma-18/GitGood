@@ -1,4 +1,5 @@
 const { Command } = require("commander");
+const fs = require("node:fs/promises");
 const chalk = require("chalk");
 const { simpleGit } = require("simple-git");
 const { scanSecrets } = require("./scanners/secrets");
@@ -244,6 +245,27 @@ hooksCommand
       );
     } catch (error) {
       console.error(chalk.red(`Unable to uninstall GitGood hooks: ${getErrorMessage(error)}`));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("commit-msg <messageFile>", { hidden: true })
+  .description("Validate a Git commit message file")
+  .action(async (messageFile) => {
+    try {
+      const message = await fs.readFile(messageFile, "utf8");
+      const result = checkCommitMessage(message);
+
+      if (!result.valid) {
+        console.error("Commit message rejected:");
+        for (const error of result.errors) {
+          console.error(`  ${error}`);
+        }
+        process.exitCode = 1;
+      }
+    } catch (error) {
+      console.error(`Unable to validate commit message: ${getErrorMessage(error)}`);
       process.exitCode = 1;
     }
   });
